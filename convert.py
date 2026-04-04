@@ -23,7 +23,6 @@ class Transformer(nn.Module):
             nn.Dropout(self.dropout),
             nn.Linear(self.d_model * 4, self.d_model)
         )
-
     def attention(self, q, k, v, x):
         Q   = q(x)
         K   = k(x)
@@ -32,7 +31,6 @@ class Transformer(nn.Module):
         T = x.size(1)
         mask = self.mask[:T, :T]
         out = out.masked_fill(mask, float('-inf'))
-
         out = torch.softmax(out, dim=-1)
         out = torch.matmul(out, V)
         return out

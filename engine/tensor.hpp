@@ -1,6 +1,6 @@
 #include<stdexcept>
-
-
+#include<vector>
+#include<cmath>
 class Tensor {
     std::vector<float> data;
     size_t rows;
@@ -63,5 +63,96 @@ public:
 
         return Tensor(res, M, N);
     }
-};
 
+    Tensor LayerNorm(Tensor& gamma, Tensor& beta, float E = 1e-5f) {
+	std::vector<float> res(data.size());
+	    for(int i=0;i<rows;i++){
+			float mean = 0.0f;
+			for(int j = 0;j<cols;j++)
+			mean += data[cols*i + j];
+		mean /= cols;
+		float var = 0.0f;
+		for(int j=0;j<cols;j++) {
+		    float diff = data[i*cols + j] - mean;
+			var += diff * diff;
+		}
+
+		var /= cols;
+
+		float d = std::sqrt(var + E);
+
+		for(int j = 0;j<cols;j++) {
+			float norm = (data[i*cols + j] - mean)/d;
+			res[i * cols + j] = gamma.data[j] * norm + beta.data[j];
+		}
+	    }
+	return Tensor(res,rows,cols);
+    }
+
+    Tensor operator / (const float val){
+        std::vector<float> res(rows*cols,0);
+        for(size_t i = 0;i<this->rows* this->cols;i++)
+            res[i] = this->data[i]/val;
+        return Tensor(res,this->rows,this->cols);
+    }
+
+    Tensor softmax() const {
+        std::vector<float> res(data.size());
+
+        for(size_t i = 0; i < rows; i++) {
+            // Find max value in this row for numerical stability
+            float max_val = data[i * cols];
+            for(size_t j = 1; j < cols; j++) {
+                max_val = std::max(max_val, data[i * cols + j]);
+            }
+
+            // Compute exp(x - max) for each element in the row
+            float sum_exp = 0.0f;
+            for(size_t j = 0; j < cols; j++) {
+                float exp_val = std::exp(data[i * cols + j] - max_val);
+                res[i * cols + j] = exp_val;
+                sum_exp += exp_val;
+            }
+
+            // Normalize by sum of exponentials
+            for(size_t j = 0; j < cols; j++) {
+                res[i * cols + j] /= sum_exp;
+            }
+        }
+
+        return Tensor(res, rows, cols);
+    }
+
+    Tensor t() const {
+        std::vector<float> res(data.size());
+
+        for(size_t i = 0; i < rows; i++) {
+            for(size_t j = 0; j < cols; j++) {
+                // Element at (i, j) goes to (j, i) in transposed matrix
+                res[j * rows + i] = data[i * cols + j];
+            }
+        }
+
+        return Tensor(res, cols, rows);
+    }
+
+    Tensor mask() const {
+        std::vector<float> res(data.size());
+        const float MASK_VALUE = -1e9f;
+
+        for(size_t i = 0; i < rows; i++) {
+            for(size_t j = 0; j < cols; j++) {
+                // Upper triangular positions (j > i) get masked
+                if(j > i) {
+                    res[i * cols + j] = MASK_VALUE;
+                } else {
+                    res[i * cols + j] = data[i*cols + j];
+                }
+            }
+        }
+        return Tensor(res, rows, cols);
+    }
+
+
+
+};
