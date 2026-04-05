@@ -3,5 +3,5 @@
 
 int main() {
 	Runner runner;
-	runner.list();
+	runner.run();
 }

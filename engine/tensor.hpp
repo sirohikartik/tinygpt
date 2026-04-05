@@ -13,12 +13,12 @@ public:
     Tensor(std::vector<float> weights, size_t row, size_t col)
         : data(weights), rows(row), cols(col) {}
 
-    size_t shape(int idx){
+    size_t shape(int idx) const {
         if(idx==0) return rows;
         return cols;
     }
 
-    std::vector<float> getData(){
+    std::vector<float> getData() const {
         return this->data;
     }
 
@@ -194,4 +194,12 @@ public:
             return Tensor(res, rows, total_cols);
         }
 
+        Tensor add_bias(const Tensor& bias) const {
+            // bias is (cols, 1) or (1, cols) - add to each row
+            std::vector<float> res(data.size());
+            for(size_t i = 0; i < rows; i++)
+                for(size_t j = 0; j < cols; j++)
+                    res[i * cols + j] = data[i * cols + j] + bias.getData()[j];
+            return Tensor(res, rows, cols);
+        }
 };

@@ -1,3 +1,3 @@
 import numpy as np
-a = np.load("weights/transforms.1.mask.npy")
-print(a.dtype, a.shape)
+a = np.load("weights/embeddings.weight.npy")
+print(a.shape, a.ndim)
