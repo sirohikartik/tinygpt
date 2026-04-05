@@ -5,4 +5,4 @@ model.pt
 /__pycache__
 a.out
 model.onnx.data
-
+gpt2_vocab.json

@@ -18,6 +18,10 @@ public:
         return cols;
     }
 
+    std::vector<float> getData(){
+        return this->data;
+    }
+
     Tensor operator+(const Tensor& obj) const {
         if (rows != obj.rows || cols != obj.cols)
             throw std::invalid_argument("Shape mismatch for addition");
