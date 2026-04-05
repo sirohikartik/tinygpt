@@ -4,6 +4,7 @@ from transformers import GPT2Tokenizer, AutoTokenizer
 import math
 
 
+
 device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 
 class Transformer(nn.Module):
@@ -107,6 +108,12 @@ model.eval()
 
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
+
+
+tokens = tokenizer.encode("Hello, how are you?")
+input_ids = torch.tensor([tokens])
+print(input_ids)
+
 text = input(":")
 input_ids = tokenizer.encode(text, return_tensors="pt").to(device)
 
@@ -118,7 +125,7 @@ for _ in range(max_new_tokens):
 
     with torch.no_grad():
         outputs = model(input_crop)
-    
+
     temperature = 0.8
     k = 20
 
@@ -135,5 +142,3 @@ for _ in range(max_new_tokens):
 
 output_text = tokenizer.decode(input_ids[0])
 print(output_text)
-
-

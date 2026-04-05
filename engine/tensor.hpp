@@ -73,7 +73,7 @@ public:
         return Tensor(res, M, N);
     }
 
-    Tensor LayerNorm(Tensor& gamma, Tensor& beta, float E = 1e-5f) {
+    Tensor LayerNorm (const  Tensor& gamma, const Tensor& beta, float E = 1e-5f) const {
 	std::vector<float> res(data.size());
 	    for(int i=0;i<rows;i++){
 			float mean = 0.0f;
