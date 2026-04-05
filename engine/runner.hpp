@@ -27,7 +27,6 @@ class Transformer{
 	int seq_len;
 	int num_heads;
 	public:
-
 	    Tensor attention(const Tensor& input, const Tensor& k, const  Tensor& q, const Tensor& v,float d_k){
 					d_k = std::sqrt(d_k);
 					Tensor Q = input * q;
@@ -41,9 +40,11 @@ class Transformer{
 					return Q;
 		}
 
-		Tensor multiheadattention(){}
-
-		Tensor forward(Tensor& input){
-
+		Tensor multiheadattention(std::vector<Tensor> qs, std::vector<Tensor> ks, std::vector<Tensor> vs, std::vector<Tensor> input,float d_k){
+		std::vector<Tensor> res;
+		for(int i =1;i<qs.size();i++){
+		    res.push_back(attention(input[i],ks[i],qs[i],vs[i],d_k));
+		}
+		return attention(input[0],ks[0],qs[0],vs[0],d_k).concat_horizontal(res);
 		}
 };

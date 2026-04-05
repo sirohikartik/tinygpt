@@ -13,6 +13,11 @@ public:
     Tensor(std::vector<float> weights, size_t row, size_t col)
         : data(weights), rows(row), cols(col) {}
 
+    size_t shape(int idx){
+        if(idx==0) return rows;
+        return cols;
+    }
+
     Tensor operator+(const Tensor& obj) const {
         if (rows != obj.rows || cols != obj.cols)
             throw std::invalid_argument("Shape mismatch for addition");
@@ -154,5 +159,35 @@ public:
     }
 
 
+    static Tensor concat_horizontal(const std::vector<Tensor>& tensors) {
+            if (tensors.empty()) {
+                return Tensor();
+            }
+
+            size_t rows = tensors[0].rows;
+            size_t total_cols = 0;
+
+            // Calculate total columns and verify all have same rows
+            for (const auto& t : tensors) {
+                if (t.rows != rows) {
+                    throw std::invalid_argument("All tensors must have same number of rows for horizontal concat");
+                }
+                total_cols += t.cols;
+            }
+
+            std::vector<float> res(rows * total_cols);
+            size_t col_offset = 0;
+
+            for (const auto& t : tensors) {
+                for (size_t i = 0; i < rows; i++) {
+                    for (size_t j = 0; j < t.cols; j++) {
+                        res[i * total_cols + (col_offset + j)] = t.data[i * t.cols + j];
+                    }
+                }
+                col_offset += t.cols;
+            }
+
+            return Tensor(res, rows, total_cols);
+        }
 
 };
