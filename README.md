@@ -7,13 +7,11 @@ A custom high-performance C++ inference engine for transformer-based language mo
 This project is specifically developed for macOS. To build and run:
 
 ```bash
-# Step 1: Export tokenizer vocabulary (requires Python with transformers)
-python tokenizer.py
 
-# Step 2: Build the project
+# Step 1: Build the project
 make
 
-# Step 3: Run inference
+# Step 2: Run inference
 ./a.out
 ```
 
