@@ -1,4 +1,3 @@
-
 #include <stdexcept>
 #include <vector>
 #include <algorithm>
@@ -12,7 +11,7 @@ namespace fs = std::filesystem;
 std::string path_header = "weights";
 std::map<std::string,Tensor> parse_weights(){
 	std::map<std::string,Tensor> weights;
-	int i = 0;
+	// int i = 0;
 	for(const auto& file : fs::directory_iterator(path_header)){
 		try{
 			npy::npy_data d = npy::read_npy<float>(file.path().string());
@@ -23,9 +22,9 @@ std::map<std::string,Tensor> parse_weights(){
 			std::string filename = file.path().filename().string();
 			std::string name = filename.substr(0, filename.size() - 4);
 			weights[name] = Tensor(v,rows,cols);
-			std::cout<<name<<"\n";
-			std::cout<<"Done weight "<<i<<" shape :"<<rows<<" "<<cols<<"\n";
-			i++;
+			// std::cout<<name<<"\n";
+			// std::cout<<"Done weight "<<i<<" shape :"<<rows<<" "<<cols<<"\n";
+			// i++;
 		}
 		catch(std::exception& e) {
 			std::cout<<"Found mask skipping \n";
