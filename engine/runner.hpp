@@ -280,7 +280,7 @@ class Runner{
             std::vector<int> tokens = tokenizer.encode(prompt);
             std::cout << "Tokenized: " << tokens.size() << " tokens\n";
 
-            const int max_new_tokens = 5;
+            const int max_new_tokens = 20;
             const float temperature = 0.8f;
             int eos_token = tokenizer.eos();
 
