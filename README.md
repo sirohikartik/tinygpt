@@ -2,6 +2,32 @@
 
 A custom high-performance C++ inference engine for transformer-based language models. This engine is designed to run a 30 million parameter model trained on the TinyStories dataset.
 
+## Quick Start (macOS)
+
+This project is specifically developed for macOS. To build and run:
+
+```bash
+# Step 1: Export tokenizer vocabulary (requires Python with transformers)
+python tokenizer.py
+
+# Step 2: Build the project
+make
+
+# Step 3: Run inference
+./a.out
+```
+
+## Platform Compatibility
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| macOS (Apple Silicon) | Supported | Uses NEON SIMD instructions |
+| macOS (Intel) | Supported | Uses SSE/AVX SIMD instructions |
+| Linux | Not Tested | May require Makefile adjustments for SIMD flags |
+| Windows | Not Tested | May require Makefile adjustments for SIMD flags |
+
+The Makefile uses `-march=native` which enables CPU-specific SIMD instructions. On macOS Apple Silicon, this enables NEON. On Intel Macs, this enables SSE/AVX. For Linux or Windows, you may need to modify the Makefile to use appropriate SIMD flags for your CPU architecture.
+
 ## Overview
 
 This project implements a complete inference pipeline for decoder-only transformer models. The engine features optimized matrix multiplication with SIMD instructions, a GPT-2 compatible Byte Pair Encoding tokenizer, and a modular architecture that separates tensor operations, model components, and tokenization.
