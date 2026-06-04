@@ -30,6 +30,8 @@ The Makefile uses `-march=native` which enables CPU-specific SIMD instructions. 
 
 This project implements a complete inference pipeline for decoder-only transformer models. The engine features optimized matrix multiplication with SIMD instructions, a GPT-2 compatible Byte Pair Encoding tokenizer, and a modular architecture that separates tensor operations, model components, and tokenization.
 
+Performance optimizations targeting Apple Silicon achieved a 96.9 ms Time-to-First-Token (TTFT) and 1.88 tokens/sec generation throughput (537 ms/token) when running a ~30M parameter TinyStories model on a baseline Apple M1 MacBook Air (8 GB RAM).
+
 ## Features
 
 | Feature | Description |
