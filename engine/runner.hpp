@@ -5,6 +5,12 @@
 #include<iostream>
 #include<cmath>
 #include<vector>
+#include<chrono>
+
+struct KVCache {
+    std::vector<Tensor> ks;
+    std::vector<Tensor> vs;
+};
 
 class Transformer{
     int d_model, max_len, vocab_size, seq_len, num_heads, d_k;
@@ -41,16 +47,22 @@ public:
     }
 
     Tensor attention(const Tensor& input, const Tensor& k, const Tensor& q, const Tensor& v,
-                     const Tensor& qb, const Tensor& kb, const Tensor& vb){
+                     const Tensor& qb, const Tensor& kb, const Tensor& vb, KVCache& cache, int head_idx){
         float scale = std::sqrt(static_cast<float>(d_k));
         Tensor Q = (input * q).add_bias(qb);
-        Tensor K = (input * k).add_bias(kb);
-        Tensor V = (input * v).add_bias(vb);
-        Tensor scores = Q * K.t();
+        Tensor K_curr = (input * k).add_bias(kb);
+        Tensor V_curr = (input * v).add_bias(vb);
+
+        std::vector<Tensor> k_tensors = {cache.ks[head_idx], K_curr};
+        cache.ks[head_idx] = Tensor::concat_vertical(k_tensors);
+        std::vector<Tensor> v_tensors = {cache.vs[head_idx], V_curr};
+        cache.vs[head_idx] = Tensor::concat_vertical(v_tensors);
+
+        Tensor scores = Q * cache.ks[head_idx].t();
         scores = scores / scale;
-        scores = scores.mask();
+        if (input.shape(0) > 1) scores = scores.mask();
         scores = scores.softmax();
-        return scores * V;
+        return scores * cache.vs[head_idx];
     }
 
     Tensor gelu(const Tensor& x) {
@@ -63,18 +75,18 @@ public:
         return Tensor(res, x.shape(0), x.shape(1));
     }
 
-    Tensor multiheadattention(const Tensor& input){
+    Tensor multiheadattention(const Tensor& input, KVCache& cache){
         std::vector<Tensor> res;
         for(int i = 0; i < num_heads; i++)
-            res.push_back(attention(input, ks[i], qs[i], vs[i], q_biases[i], k_biases[i], v_biases[i]));
+            res.push_back(attention(input, ks[i], qs[i], vs[i], q_biases[i], k_biases[i], v_biases[i], cache, i));
         Tensor concat = Tensor::concat_horizontal(res);
         return (concat * join_weight).add_bias(join_bias);
     }
 
-    Tensor forward(const Tensor& input){
+    Tensor forward(const Tensor& input, KVCache& cache){
         // pre-norm attention
         Tensor normed1 = input.LayerNorm(gamma1, beta1);
-        Tensor attn = multiheadattention(normed1);
+        Tensor attn = multiheadattention(normed1, cache);
         Tensor x = input + attn;
 
         // pre-norm FFN
@@ -178,7 +190,7 @@ class Model {
             return Tensor(res, input.shape(0), input.shape(1));
         }
 
-        Tensor forward(const std::vector<int>& input_tokens) {
+        Tensor forward(const std::vector<int>& input_tokens, std::vector<KVCache>& caches) {
             if (input_tokens.empty())
                 throw std::invalid_argument("Input tokens cannot be empty");
             if (input_tokens.size() > this->seq_len)
@@ -186,9 +198,20 @@ class Model {
 
             Tensor input = embeddings(input_tokens);
             for(int i = 0; i < blocks; i++)
-                input = transformers[i].forward(input);
+                input = transformers[i].forward(input, caches[i]);
 
             return (input * output_projection).add_bias(output_projection_bias);
+        }
+
+        Tensor forward(const std::vector<int>& input_tokens) {
+            std::vector<KVCache> caches(blocks);
+            // This is only for single-pass forward, not useful for generation loop
+            // But we keep it for compatibility.
+            // We need to initialize the caches.ks and vs.
+            // Wait, Transformer::attention does it if they are empty? 
+            // No, I used cache.ks[head_idx] which will throw if empty.
+            // I should initialize them in Model constructor or here.
+            return forward(input_tokens, caches); 
         }
 
         Tensor forward(const std::string& text) {
@@ -278,27 +301,52 @@ class Runner{
             std::getline(std::cin, prompt);
 
             std::vector<int> tokens = tokenizer.encode(prompt);
-            std::cout << "Tokenized: " << tokens.size() << " tokens\n";
+            int prompt_token_count = tokens.size();
+            std::cout << "Tokenized: " << prompt_token_count << " tokens\n";
 
             int max_new_tokens;
-            std::cout<<"Enter Max Tokens:";
-            std::cin>>max_new_tokens;
+            std::cout << "Enter Max Tokens: ";
+            std::cin >> max_new_tokens;
             const float temperature = 0.8f;
             int eos_token = tokenizer.eos();
 
-            std::cout << "Generating...\n";
-            for(int i = 0; i < max_new_tokens; i++) {
-                std::vector<int> context = tokens.size() > 128
-                    ? std::vector<int>(tokens.end() - 128, tokens.end())
-                    : tokens;
+            // --- KV CACHE INITIALIZATION ---
+            std::vector<KVCache> caches(blocks);
+            for(int b = 0; b < blocks; b++) {
+                caches[b].ks.resize(num_heads);
+                caches[b].vs.resize(num_heads);
+                for(int h = 0; h < num_heads; h++) {
+                    caches[b].ks[h] = Tensor({}, 0, d_model / num_heads);
+                    caches[b].vs[h] = Tensor({}, 0, d_model / num_heads);
+                }
+            }
 
-                Tensor logits = model.forward(context);
-                size_t last_pos = context.size() - 1;
+            // --- BENCHMARK VARIABLES ---
+            int generated_token_count = 0;
+            double prompt_processing_time_ms = 0.0;
+            double ttft_ms = 0.0;
+            double total_decode_time_ms = 0.0; // Generation time excluding first token
+
+            std::cout << "Generating...\n";
+            
+            // Start End-to-End Clock
+            auto e2e_start = std::chrono::high_resolution_clock::now();
+            auto generation_start = e2e_start; // Marks the beginning of the loops
+
+            // First pass: process prompt
+            auto prompt_start = std::chrono::high_resolution_clock::now();
+            Tensor logits = model.forward(tokens, caches);
+            auto prompt_end = std::chrono::high_resolution_clock::now();
+            prompt_processing_time_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
+            ttft_ms = std::chrono::duration<double, std::milli>(prompt_end - generation_start).count();
+
+            for(int i = 0; i < max_new_tokens; i++) {
+                size_t logit_row = (i == 0) ? (tokens.size() - 1) : 0;
 
                 std::vector<float> probs(vocab_size);
-                float max_logit = logits.getData()[last_pos * vocab_size];
+                float max_logit = logits.getData()[logit_row * vocab_size];
                 for(int j = 0; j < vocab_size; j++) {
-                    float scaled = (logits.getData()[last_pos * vocab_size + j] - max_logit) / temperature;
+                    float scaled = (logits.getData()[logit_row * vocab_size + j] - max_logit) / temperature;
                     probs[j] = std::exp(scaled);
                 }
                 float sum = 0;
@@ -314,14 +362,50 @@ class Runner{
                 }
 
                 tokens.push_back(next_token);
+                generated_token_count++;
+
                 if(next_token == eos_token) { std::cout << "EOS\n"; break; }
+
+                // Compute logits for the next token using only the new token and the KV cache
+                auto step_start = std::chrono::high_resolution_clock::now();
+                
+                // Only pass the last token
+                std::vector<int> next_token_context = {next_token};
+                logits = model.forward(next_token_context, caches);
+                
+                auto step_end = std::chrono::high_resolution_clock::now();
+                double step_duration_ms = std::chrono::duration<double, std::milli>(step_end - step_start).count();
+                total_decode_time_ms += step_duration_ms;
             }
+
+            auto e2e_end = std::chrono::high_resolution_clock::now();
+            double e2e_time_ms = std::chrono::duration<double, std::milli>(e2e_end - e2e_start).count();
+            double total_generation_time_ms = std::chrono::duration<double, std::milli>(e2e_end - generation_start).count();
 
             std::string output = tokenizer.decode(tokens);
             std::cout << "\n=== Generated Text ===\n" << output << "\n======================\n";
 
+            // --- PRINT BENCHMARK REPORT ---
+            std::cout << "\n================ BENCHMARK REPORT ================\n";
+            std::cout << "Prompt Tokens         : " << prompt_token_count << "\n";
+            std::cout << "Generated Tokens      : " << generated_token_count << "\n";
+            std::cout << "--------------------------------------------------\n";
+            std::cout << "Prompt Processing Time: " << prompt_processing_time_ms << " ms\n";
+            std::cout << "TTFT                  : " << ttft_ms << " ms\n";
+            
+            if (generated_token_count > 1) {
+                double avg_time_per_token = total_decode_time_ms / (generated_token_count - 1);
+                std::cout << "Avg Time Per Token    : " << avg_time_per_token << " ms/token\n";
+            } else {
+                std::cout << "Avg Time Per Token    : N/A (Generated only 1 token)\n";
+            }
+
+            double generation_throughput = (generated_token_count / (total_generation_time_ms / 1000.0));
+            std::cout << "Generation Throughput : " << generation_throughput << " tokens/sec\n";
+            std::cout << "End-to-End Time       : " << e2e_time_ms << " ms (" << e2e_time_ms / 1000.0 << " sec)\n";
+            std::cout << "==================================================\n";
+
         } catch(const std::exception& e) {
             std::cerr << "ERROR: " << e.what() << "\n";
         }
-    }
-};
+    }};

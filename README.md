@@ -30,7 +30,7 @@ The Makefile uses `-march=native` which enables CPU-specific SIMD instructions. 
 
 This project implements a complete inference pipeline for decoder-only transformer models. The engine features optimized matrix multiplication with SIMD instructions, a GPT-2 compatible Byte Pair Encoding tokenizer, and a modular architecture that separates tensor operations, model components, and tokenization.
 
-Performance optimizations targeting Apple Silicon achieved a 96.9 ms Time-to-First-Token (TTFT) and 1.88 tokens/sec generation throughput (537 ms/token) when running a ~30M parameter TinyStories model on a baseline Apple M1 MacBook Air (8 GB RAM).
+Performance optimizations targeting Apple Silicon achieved a 58.2 ms Time-to-First-Token (TTFT) and 84.65 tokens/sec generation throughput (11.19 ms/token) when running a ~30M parameter TinyStories model on a baseline Apple M1 MacBook Air (8 GB RAM).
 
 ## Features
 
@@ -38,6 +38,7 @@ Performance optimizations targeting Apple Silicon achieved a 96.9 ms Time-to-Fir
 |---------|-------------|
 | SIMD Optimization | Matrix multiplication utilizes AVX2/SSE instructions via compiler flags |
 | Tiled MatMul | Cache-efficient 32x32 tiling for improved memory access patterns |
+| KV Cache | Key-Value caching for $O(N)$ incremental decoding |
 | Multi-Head Attention | Full implementation with causal masking |
 | Layer Normalization | Pre-normalization architecture support |
 | BPE Tokenizer | GPT-2 compatible byte-level BPE tokenization |
@@ -176,6 +177,7 @@ The Tensor class implements the following operations:
 | Layer Normalization | LayerNorm() | Normalization with learnable parameters |
 | Causal Mask | mask() | Lower triangular mask for attention |
 | Concatenation | concat_horizontal() | Horizontal tensor concatenation |
+| Concatenation | concat_vertical() | Vertical tensor concatenation (used for KV cache) |
 | Bias Addition | add_bias() | Add bias vector to each row |
 
 ## Weight Format

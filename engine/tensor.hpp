@@ -235,6 +235,26 @@ public:
         return Tensor(res, rows, total_cols);
     }
 
+    static Tensor concat_vertical(const std::vector<Tensor>& tensors) {
+        if (tensors.empty()) return Tensor();
+
+        size_t cols = tensors[0].cols;
+        size_t total_rows = 0;
+        for (const auto& t : tensors) {
+            if (t.cols != cols)
+                throw std::invalid_argument("All tensors must have same number of columns for vertical concat");
+            total_rows += t.rows;
+        }
+
+        std::vector<float> res(total_rows * cols);
+        size_t row_offset = 0;
+        for (const auto& t : tensors) {
+            std::copy(t.data.begin(), t.data.end(), res.begin() + row_offset * cols);
+            row_offset += t.rows;
+        }
+        return Tensor(res, total_rows, cols);
+    }
+
     Tensor add_bias(const Tensor& bias) const {
         std::vector<float> res(data.size());
         for(size_t i = 0; i < rows; i++) {

@@ -3,8 +3,6 @@ import torch.nn as nn
 from transformers import GPT2Tokenizer, AutoTokenizer
 import math
 
-
-
 device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 
 class Transformer(nn.Module):
