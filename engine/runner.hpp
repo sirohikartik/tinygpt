@@ -205,12 +205,6 @@ class Model {
 
         Tensor forward(const std::vector<int>& input_tokens) {
             std::vector<KVCache> caches(blocks);
-            // This is only for single-pass forward, not useful for generation loop
-            // But we keep it for compatibility.
-            // We need to initialize the caches.ks and vs.
-            // Wait, Transformer::attention does it if they are empty? 
-            // No, I used cache.ks[head_idx] which will throw if empty.
-            // I should initialize them in Model constructor or here.
             return forward(input_tokens, caches); 
         }
 
