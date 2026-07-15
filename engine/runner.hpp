@@ -69,6 +69,7 @@ public:
     Tensor gelu(const Tensor& x) {
         const auto& d = x.getData();
         std::vector<float> res(d.size());
+        #pragma omp parallel for if(d.size() > 1024)
         for(size_t i = 0; i < d.size(); i++) {
             float v = d[i];
             res[i] = 0.5f * v * (1.0f + std::tanh(0.7978845608f * (v + 0.044715f * v * v * v)));

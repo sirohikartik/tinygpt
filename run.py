@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
-from transformers import GPT2Tokenizer, AutoTokenizer
+from transformers import GPT2Tokenizer
 import math
+import numpy as np
+import time
+import os
 
 device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -86,57 +89,123 @@ class Model(nn.Module):
             x = block(x)
         return self.out(x)
 
+def load_npy_weights(model):
+    weights_dir = "weights"
+    print(f"Loading weights from {weights_dir}...")
+    
+    # Embedding
+    emb = np.load(os.path.join(weights_dir, "embeddings.weight.npy"))
+    model.embeddings.weight.data = torch.from_numpy(emb).float().to(device)
+    
+    # Output Projection
+    out_w = np.load(os.path.join(weights_dir, "out.weight.npy"))
+    out_b = np.load(os.path.join(weights_dir, "out.bias.npy"))
+    model.out.weight.data = torch.from_numpy(out_w).float().to(device)
+    model.out.bias.data = torch.from_numpy(out_b).float().to(device)
+    
+    num_blocks = len(model.transforms)
+    num_heads = model.num_heads
+    
+    for b in range(num_blocks):
+        prefix = f"transforms.{b}."
+        trans = model.transforms[b]
+        
+        # Norms
+        trans.norm1.weight.data = torch.from_numpy(np.load(os.path.join(weights_dir, prefix + "norm1.weight.npy"))).float().to(device)
+        trans.norm1.bias.data = torch.from_numpy(np.load(os.path.join(weights_dir, prefix + "norm1.bias.npy"))).float().to(device)
+        trans.norm2.weight.data = torch.from_numpy(np.load(os.path.join(weights_dir, prefix + "norm2.weight.npy"))).float().to(device)
+        trans.norm2.bias.data = torch.from_numpy(np.load(os.path.join(weights_dir, prefix + "norm2.bias.npy"))).float().to(device)
+        
+        # Multi-head attention
+        for h in range(num_heads):
+            h_str = str(h)
+            # PyTorch Linear weights are (out, in), and npy are already (out, in)
+            q_w = np.load(os.path.join(weights_dir, f"{prefix}q.{h_str}.weight.npy"))
+            q_b = np.load(os.path.join(weights_dir, f"{prefix}q.{h_str}.bias.npy"))
+            trans.q[h].weight.data = torch.from_numpy(q_w).float().to(device)
+            trans.q[h].bias.data = torch.from_numpy(q_b).float().to(device)
+            
+            k_w = np.load(os.path.join(weights_dir, f"{prefix}k.{h_str}.weight.npy"))
+            k_b = np.load(os.path.join(weights_dir, f"{prefix}k.{h_str}.bias.npy"))
+            trans.k[h].weight.data = torch.from_numpy(k_w).float().to(device)
+            trans.k[h].bias.data = torch.from_numpy(k_b).float().to(device)
+            
+            v_w = np.load(os.path.join(weights_dir, f"{prefix}v.{h_str}.weight.npy"))
+            v_b = np.load(os.path.join(weights_dir, f"{prefix}v.{h_str}.bias.npy"))
+            trans.v[h].weight.data = torch.from_numpy(v_w).float().to(device)
+            trans.v[h].bias.data = torch.from_numpy(v_b).float().to(device)
+            
+        # Join
+        join_w = np.load(os.path.join(weights_dir, prefix + "join.weight.npy"))
+        join_b = np.load(os.path.join(weights_dir, prefix + "join.bias.npy"))
+        trans.join.weight.data = torch.from_numpy(join_w).float().to(device)
+        trans.join.bias.data = torch.from_numpy(join_b).float().to(device)
+        
+        # FFN
+        ffn1_w = np.load(os.path.join(weights_dir, prefix + "ffn.0.weight.npy"))
+        ffn1_b = np.load(os.path.join(weights_dir, prefix + "ffn.0.bias.npy"))
+        trans.ffn[0].weight.data = torch.from_numpy(ffn1_w).float().to(device)
+        trans.ffn[0].bias.data = torch.from_numpy(ffn1_b).float().to(device)
+        
+        ffn2_w = np.load(os.path.join(weights_dir, prefix + "ffn.3.weight.npy"))
+        ffn2_b = np.load(os.path.join(weights_dir, prefix + "ffn.3.bias.npy"))
+        trans.ffn[3].weight.data = torch.from_numpy(ffn2_w).float().to(device)
+        trans.ffn[3].bias.data = torch.from_numpy(ffn2_b).float().to(device)
 
 model = Model(
     max_len=128,
     vocab_size=50257,
     dropout=0.1,
     seq_len=128,
-    num_heads=8,   # FIXED
+    num_heads=8,
     d_model=256,
-    blocks=6       # FIXED
+    blocks=6
 ).to(device)
 
-
-checkpoint = torch.load("model.pt", map_location=device)
-model.load_state_dict(checkpoint)
-
+load_npy_weights(model)
 model.eval()
-
 
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
+prompt = "James bond"
+input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+print(f"Prompt: {prompt}")
 
+max_new_tokens = 100
 
-tokens = tokenizer.encode("Hello, how are you?")
-input_ids = torch.tensor([tokens])
-print(input_ids)
+# Benchmark timing
+start_time = time.time()
 
-text = input(":")
-input_ids = tokenizer.encode(text, return_tensors="pt").to(device)
+# TTFT (Time to First Token)
+with torch.no_grad():
+    outputs = model(input_ids[:, -model.seq_len:])
+    
+logits = outputs[:, -1, :]
+probs = torch.softmax(logits / 0.8, dim=-1)
+next_token = torch.multinomial(probs, num_samples=1)
+input_ids = torch.cat([input_ids, next_token], dim=1)
 
-max_new_tokens = 128
+ttft_ms = (time.time() - start_time) * 1000
+print(f"TTFT: {ttft_ms:.2f} ms")
 
-for _ in range(max_new_tokens):
-    # crop if longer than seq_len
-    input_crop = input_ids[:, -model.seq_len:]
-
+# Decode loop
+decode_start = time.time()
+for _ in range(max_new_tokens - 1):
     with torch.no_grad():
-        outputs = model(input_crop)
-
-    temperature = 0.8
-    k = 20
-
+        outputs = model(input_ids[:, -model.seq_len:])
+    
     logits = outputs[:, -1, :]
-    probs = torch.softmax(logits / temperature, dim=-1)
-
-    values, indices = torch.topk(probs, k)
-    probs = torch.zeros_like(probs).scatter_(1, indices, values)
-    probs = probs / probs.sum(dim=-1, keepdim=True)
-
+    probs = torch.softmax(logits / 0.8, dim=-1)
     next_token = torch.multinomial(probs, num_samples=1)
-
     input_ids = torch.cat([input_ids, next_token], dim=1)
 
+decode_end = time.time()
+total_decode_time_ms = (decode_end - decode_start) * 1000
+avg_time_per_token = total_decode_time_ms / (max_new_tokens - 1)
+throughput = (max_new_tokens - 1) / ((decode_end - decode_start))
+
+print(f"Avg Time Per Token: {avg_time_per_token:.2f} ms/token")
+print(f"Generation Throughput: {throughput:.2f} tokens/sec")
+
 output_text = tokenizer.decode(input_ids[0])
-print(output_text)
+print("\n=== Generated Text ===\n", output_text, "\n======================")

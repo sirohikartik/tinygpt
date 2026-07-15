@@ -1,0 +1,29 @@
+Found mask skipping 
+Found mask skipping 
+Found mask skipping 
+Found mask skipping 
+Found mask skipping 
+Found mask skipping 
+Model config: vocab=50257, d_model=256, heads=8, blocks=6
+Loaded vocab: 50257
+Loaded merges: 49992
+Model initialized!
+Loaded vocab: 50257
+Loaded merges: 49992
+Prompt: Tokenized: 2 tokens
+Enter Max Tokens: Generating...
+
+=== Generated Text ===
+James bond"There was a cool day, there was a little girl named Willa and her a small a small boy who wanted to 3 who was a boy named Tedy. She was a blue bunny and a sailor who was on a boy living who was playing on a little girl, who wanted to a shyie was a nosy and a puppy, his mommy went on a puppy, there was Mr. The boy who was out that Beckymy and the girl was a brilliant day in the boy
+======================
+
+================ BENCHMARK REPORT ================
+Prompt Tokens         : 2
+Generated Tokens      : 100
+--------------------------------------------------
+Prompt Processing Time: 17.1121 ms
+TTFT                  : 17.1121 ms
+Avg Time Per Token    : 7.51312 ms/token
+Generation Throughput : 129.796 tokens/sec
+End-to-End Time       : 770.44 ms (0.77044 sec)
+==================================================

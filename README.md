@@ -20,29 +20,48 @@ make
 
 ## Platform Compatibility
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| macOS (Apple Silicon) | Supported | Uses NEON SIMD instructions |
-| macOS (Intel) | Supported | Uses SSE/AVX SIMD instructions |
-| Linux | Not Tested | May require Makefile adjustments for SIMD flags |
-| Windows | Not Tested | May require Makefile adjustments for SIMD flags |
-
-The Makefile uses `-march=native` which enables CPU-specific SIMD instructions. On macOS Apple Silicon, this enables NEON. On Intel Macs, this enables SSE/AVX. For Linux or Windows, you may need to modify the Makefile to use appropriate SIMD flags for your CPU architecture.
+This project is optimized exclusively for **macOS (Apple Silicon)**, utilizing the **ARM NEON** library for SIMD instructions.
 
 ## Overview
 
 This project implements a complete inference pipeline for decoder-only transformer models. The engine features optimized matrix multiplication with SIMD instructions, a GPT-2 compatible Byte Pair Encoding tokenizer, and a modular architecture that separates tensor operations, model components, and tokenization.
 
-Performance optimizations targeting Apple Silicon achieved a 50.42 ms Time-to-First-Token (TTFT) and 127.94 tokens/sec generation throughput (7.29 ms/token) when running a ~30M parameter TinyStories model on a baseline Apple M1 MacBook Air (8 GB RAM).
+## Performance Comparison
+
+The engine was benchmarked against a naive PyTorch implementation running on Apple Silicon (MPS). All results reported below are the **mean of 5 independent runs** using the provided `benchmark.sh` script.
+
+| Metric | Naive PyTorch (MPS) | Custom C++ Engine | Speedup |
+| :--- | :--- | :--- | :--- |
+| **TTFT** | 910.29 ms | 14.08 ms | $\approx 64.7\text{x}$ |
+| **Avg Time / Token** | 87.00 ms | 8.11 ms | $\approx 10.7\text{x}$ |
+| **Throughput** | 11.49 tok/s | 120.94 tok/s | $\approx 10.5\text{x}$ |
+
+A `benchmark.sh` script is provided in the root directory to reproduce these metrics and perform comparative analysis.
+
+## Optimizations
+
+The engine achieves its performance through several low-level optimization techniques:
+
+### 1. SIMD Kernels (NEON/AVX)
+Utilizes hardware-level vectorization to process multiple data points in a single instruction.
+- **Implemented in**: `operator+`, `operator*`, `LayerNorm`, `operator/`, `softmax`, `add_bias`.
+
+### 2. Tiled Matrix Multiplication
+Implements a cache-efficient 32x32 tiling strategy to minimize cache misses and maximize memory bandwidth utilization.
+- **Implemented in**: `operator*`.
+
+### 3. OpenMP Parallelism
+Distributes independent compute-heavy loops across multiple CPU cores, using adaptive thresholds to avoid threading overhead on small tensors.
+- **Implemented in**: `operator*` (matmul), `operator+` (addition), `softmax`, `add_bias`, `gelu`, and `multiheadattention`.
+
+### 4. KV Caching
+Implements Key-Value caching for $O(N)$ incremental decoding, preventing the redundant re-computation of previous tokens during the generation phase.
+- **Implemented in**: `attention` (using `KVCache` structure).
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| SIMD Optimization | Matrix multiplication utilizes AVX2/SSE instructions via compiler flags |
-| Tiled MatMul | Cache-efficient 32x32 tiling for improved memory access patterns |
-| Parallel Attention | Multi-head attention parallelized across CPU cores using OpenMP |
-| KV Cache | Key-Value caching for $O(N)$ incremental decoding |
 | Multi-Head Attention | Full implementation with causal masking |
 | Layer Normalization | Pre-normalization architecture support |
 | BPE Tokenizer | GPT-2 compatible byte-level BPE tokenization |

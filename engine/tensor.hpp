@@ -29,18 +29,19 @@ public:
             throw std::invalid_argument("Shape mismatch for addition");
 
         std::vector<float> res(data.size());
-        size_t i = 0;
         size_t n = data.size();
 
-        // process 4 floats at a time with NEON
-        for (; i + 4 <= n; i += 4) {
-            float32x4_t a = vld1q_f32(&data[i]);
-            float32x4_t b = vld1q_f32(&obj.data[i]);
-            vst1q_f32(&res[i], vaddq_f32(a, b));
+        #pragma omp parallel for if(n > 1024)
+        for (size_t i = 0; i < n; i += 4) {
+            if (i + 4 <= n) {
+                float32x4_t a = vld1q_f32(&data[i]);
+                float32x4_t b = vld1q_f32(&obj.data[i]);
+                vst1q_f32(&res[i], vaddq_f32(a, b));
+            } else {
+                for (size_t k = i; k < n; ++k)
+                    res[k] = data[k] + obj.data[k];
+            }
         }
-        // remainder
-        for (; i < n; i++)
-            res[i] = data[i] + obj.data[i];
 
         return Tensor(res, rows, cols);
     }
@@ -58,6 +59,7 @@ public:
         // NEON tiled matmul
         constexpr size_t TILE = 32;
 
+        #pragma omp parallel for if(M > 16)
         for (size_t i0 = 0; i0 < M; i0 += TILE) {
             size_t iEnd = std::min(i0 + TILE, M);
             for (size_t k0 = 0; k0 < K; k0 += TILE) {
@@ -150,6 +152,7 @@ public:
     Tensor softmax() const {
         std::vector<float> res(data.size());
 
+        #pragma omp parallel for if(rows > 8)
         for(size_t i = 0; i < rows; i++) {
             const float* row = &data[i * cols];
             float* out = &res[i * cols];
@@ -257,6 +260,7 @@ public:
 
     Tensor add_bias(const Tensor& bias) const {
         std::vector<float> res(data.size());
+        #pragma omp parallel for if(rows > 8)
         for(size_t i = 0; i < rows; i++) {
             size_t j = 0;
             for (; j + 4 <= cols; j += 4) {
