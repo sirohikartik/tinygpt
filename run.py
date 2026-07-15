@@ -6,8 +6,7 @@ import numpy as np
 import time
 import os
 
-device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-
+device = "cpu"
 class Transformer(nn.Module):
     def __init__(self, max_len, vocab_size, dropout, seq_len, num_heads=6, d_model=256):
         super().__init__()
