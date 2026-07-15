@@ -6,6 +6,7 @@
 #include<cmath>
 #include<vector>
 #include<chrono>
+#include <omp.h>
 
 struct KVCache {
     std::vector<Tensor> ks;
@@ -76,9 +77,10 @@ public:
     }
 
     Tensor multiheadattention(const Tensor& input, KVCache& cache){
-        std::vector<Tensor> res;
+        std::vector<Tensor> res(num_heads);
+        #pragma omp parallel for
         for(int i = 0; i < num_heads; i++)
-            res.push_back(attention(input, ks[i], qs[i], vs[i], q_biases[i], k_biases[i], v_biases[i], cache, i));
+            res[i] = attention(input, ks[i], qs[i], vs[i], q_biases[i], k_biases[i], v_biases[i], cache, i);
         Tensor concat = Tensor::concat_horizontal(res);
         return (concat * join_weight).add_bias(join_bias);
     }

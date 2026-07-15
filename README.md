@@ -8,6 +8,9 @@ This project is specifically developed for macOS. To build and run:
 
 ```bash
 
+# Step 0: Install OpenMP dependency
+brew install libomp
+
 # Step 1: Build the project
 make
 
@@ -30,7 +33,7 @@ The Makefile uses `-march=native` which enables CPU-specific SIMD instructions. 
 
 This project implements a complete inference pipeline for decoder-only transformer models. The engine features optimized matrix multiplication with SIMD instructions, a GPT-2 compatible Byte Pair Encoding tokenizer, and a modular architecture that separates tensor operations, model components, and tokenization.
 
-Performance optimizations targeting Apple Silicon achieved a 58.2 ms Time-to-First-Token (TTFT) and 84.65 tokens/sec generation throughput (11.19 ms/token) when running a ~30M parameter TinyStories model on a baseline Apple M1 MacBook Air (8 GB RAM).
+Performance optimizations targeting Apple Silicon achieved a 50.42 ms Time-to-First-Token (TTFT) and 127.94 tokens/sec generation throughput (7.29 ms/token) when running a ~30M parameter TinyStories model on a baseline Apple M1 MacBook Air (8 GB RAM).
 
 ## Features
 
@@ -38,6 +41,7 @@ Performance optimizations targeting Apple Silicon achieved a 58.2 ms Time-to-Fir
 |---------|-------------|
 | SIMD Optimization | Matrix multiplication utilizes AVX2/SSE instructions via compiler flags |
 | Tiled MatMul | Cache-efficient 32x32 tiling for improved memory access patterns |
+| Parallel Attention | Multi-head attention parallelized across CPU cores using OpenMP |
 | KV Cache | Key-Value caching for $O(N)$ incremental decoding |
 | Multi-Head Attention | Full implementation with causal masking |
 | Layer Normalization | Pre-normalization architecture support |
@@ -228,7 +232,6 @@ The engine includes comprehensive error handling:
 | Batch Size | Supports batch size of 1 |
 | Precision | FP32 only (no FP16/INT8 quantization) |
 | Context | Fixed maximum context length |
-| Threading | Single-threaded execution |
 
 ## Dependencies
 
@@ -237,6 +240,7 @@ The engine includes comprehensive error handling:
 | npy.hpp | NumPy file parsing | GitHub (external) |
 | json.hpp | JSON parsing | GitHub (external) |
 | transformers | Tokenizer export | HuggingFace (Python) |
+| libomp | OpenMP support for parallelization | Homebrew (macOS) |
 
 ## License
 
