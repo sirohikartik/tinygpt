@@ -50,20 +50,20 @@ public:
     Tensor attention(const Tensor& input, const Tensor& k, const Tensor& q, const Tensor& v,
                      const Tensor& qb, const Tensor& kb, const Tensor& vb, KVCache& cache, int head_idx){
         float scale = std::sqrt(static_cast<float>(d_k));
-        Tensor Q = (input * q).add_bias(qb);
-        Tensor K_curr = (input * k).add_bias(kb);
-        Tensor V_curr = (input * v).add_bias(vb);
+        Tensor Q = input.matmul_blas(q).add_bias(qb);
+        Tensor K_curr = input.matmul_blas(k).add_bias(kb);
+        Tensor V_curr = input.matmul_blas(v).add_bias(vb);
 
         std::vector<Tensor> k_tensors = {cache.ks[head_idx], K_curr};
         cache.ks[head_idx] = Tensor::concat_vertical(k_tensors);
         std::vector<Tensor> v_tensors = {cache.vs[head_idx], V_curr};
         cache.vs[head_idx] = Tensor::concat_vertical(v_tensors);
 
-        Tensor scores = Q * cache.ks[head_idx].t();
+        Tensor scores = Q.matmul_blas(cache.ks[head_idx].t());
         scores = scores / scale;
         if (input.shape(0) > 1) scores = scores.mask();
         scores = scores.softmax();
-        return scores * cache.vs[head_idx];
+        return scores.matmul_blas(cache.vs[head_idx]);
     }
 
     Tensor gelu(const Tensor& x) {
@@ -83,20 +83,20 @@ public:
         for(int i = 0; i < num_heads; i++)
             res[i] = attention(input, ks[i], qs[i], vs[i], q_biases[i], k_biases[i], v_biases[i], cache, i);
         Tensor concat = Tensor::concat_horizontal(res);
-        return (concat * join_weight).add_bias(join_bias);
+        return concat.matmul_blas(join_weight).add_bias(join_bias);
     }
 
     Tensor forward(const Tensor& input, KVCache& cache){
         // pre-norm attention
         Tensor normed1 = input.LayerNorm(gamma1, beta1);
         Tensor attn = multiheadattention(normed1, cache);
-        Tensor x = input + attn;
+        Tensor x = input.add_blas(attn);
 
         // pre-norm FFN
         Tensor normed2 = x.LayerNorm(gamma2, beta2);
-        Tensor ffn_out = gelu((normed2 * ffn1_weight).add_bias(ffn1_bias));
-        ffn_out = (ffn_out * ffn2_weight).add_bias(ffn2_bias);
-        x = x + ffn_out;
+        Tensor ffn_out = gelu(normed2.matmul_blas(ffn1_weight).add_bias(ffn1_bias));
+        ffn_out = ffn_out.matmul_blas(ffn2_weight).add_bias(ffn2_bias);
+        x = x.add_blas(ffn_out);
 
         return x;
     }
@@ -203,7 +203,7 @@ class Model {
             for(int i = 0; i < blocks; i++)
                 input = transformers[i].forward(input, caches[i]);
 
-            return (input * output_projection).add_bias(output_projection_bias);
+            return input.matmul_blas(output_projection).add_bias(output_projection_bias);
         }
 
         Tensor forward(const std::vector<int>& input_tokens) {

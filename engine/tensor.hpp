@@ -2,6 +2,7 @@
 #include<vector>
 #include<cmath>
 #include<arm_neon.h>
+#include <Accelerate/Accelerate.h>
 
 class Tensor {
     std::vector<float> data;
@@ -46,6 +47,16 @@ public:
         return Tensor(res, rows, cols);
     }
 
+    Tensor add_blas(const Tensor& obj) const {
+        if (rows != obj.rows || cols != obj.cols)
+            throw std::invalid_argument("Shape mismatch for addition");
+
+        std::vector<float> res(data.size());
+        vDSP_vadd(data.data(), 1, obj.data.data(), 1, res.data(), 1, data.size());
+
+        return Tensor(res, rows, cols);
+    }
+
     Tensor operator*(const Tensor& obj) const {
         if (cols != obj.rows)
             throw std::invalid_argument("Shape mismatch for matmul: A.cols must equal B.rows");
@@ -85,6 +96,22 @@ public:
                 }
             }
         }
+
+        return Tensor(res, M, N);
+    }
+
+    Tensor matmul_blas(const Tensor& obj) const {
+        if (cols != obj.rows)
+            throw std::invalid_argument("Shape mismatch for matmul: A.cols must equal B.rows");
+
+        const size_t M = rows;
+        const size_t K = cols;
+        const size_t N = obj.cols;
+
+        std::vector<float> res(M * N, 0.0f);
+
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                    M, N, K, 1.0f, data.data(), K, obj.data.data(), N, 0.0f, res.data(), N);
 
         return Tensor(res, M, N);
     }

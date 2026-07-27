@@ -30,11 +30,11 @@ This project implements a complete inference pipeline for decoder-only transform
 
 The engine was benchmarked against naive PyTorch implementations running on both Apple Silicon (MPS) and CPU. All results reported below are the **mean of 5 independent runs** using the provided `benchmark.sh` script.
 
-| Metric | PyTorch (MPS) | PyTorch (CPU) | Custom C++ Engine | Speedup (vs MPS) |
-| :--- | :--- | :--- | :--- | :--- |
-| **TTFT** | 910.29 ms | 13.53 ms | 14.08 ms | $\approx 64.6\text{x}$ |
-| **Avg Time / Token** | 87.00 ms | 12.20 ms | 8.11 ms | $\approx 10.7\text{x}$ |
-| **Throughput** | 11.49 tok/s | 81.96 tok/s | 120.94 tok/s | $\approx 10.5\text{x}$ |
+| Metric | PyTorch (MPS) | PyTorch (CPU) | Custom C++ Engine | Custom C++ (BLAS) | Speedup (vs MPS) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **TTFT** | 910.29 ms | 13.53 ms | 14.08 ms | 8.32 ms | $\approx 109.4\text{x}$ |
+| **Avg Time / Token** | 87.00 ms | 12.20 ms | 8.11 ms | 2.13 ms | $\approx 40.8\text{x}$ |
+| **Throughput** | 11.49 tok/s | 81.96 tok/s | 120.94 tok/s | 435.29 tok/s | $\approx 37.9\text{x}$ |
 
 A `benchmark.sh` script is provided in the root directory to reproduce these metrics and perform comparative analysis.
 
