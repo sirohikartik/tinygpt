@@ -2,6 +2,8 @@
 
 A custom high-performance C++ inference engine for transformer-based language models. This engine is designed to run a 30 million parameter model trained on the TinyStories dataset.
 
+Cool version of this Readme -> https://sirohikartik.github.io/tinygpt/docs
+
 ## Quick Start (macOS)
 
 This project is specifically developed for macOS. To build and run:
