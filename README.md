@@ -1,4 +1,6 @@
-# Inference Engine
+# tinygpt
+
+Try - https://tinygpt.onrender.com
 
 A custom high-performance C++ inference engine for transformer-based language models. This engine is designed to run a 30 million parameter model trained on the TinyStories dataset.
 
