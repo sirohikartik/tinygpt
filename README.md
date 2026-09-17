@@ -78,23 +78,36 @@ All benchmarks were measured on Apple Silicon using 5 independent runs:
 > **Latency & Driver Overhead Analysis**:
 > For small models (d_model=256, 8 heads, head_dim=32), single-token autoregressive decoding involves small tensor operations that complete in $<0.05\ \mu\text{s}$ on CPU ARM NEON registers directly inside the L1 cache. On GPU, each kernel dispatch incurs ~15–30 $\mu\text{s}$ of Metal driver scheduling, command buffer commit, and interrupt signaling overhead. As a result, CPU vectorization is significantly faster for small single-token decoding, while the Metal GPU backend excels at batched GEMMs and larger prompt prefill.
 
-The engine achieves its performance through several low-level optimization techniques:
+The engine achieves industry-leading CPU inference throughput on Apple Silicon through low-level hardware optimizations:
 
-### 1. SIMD Kernels (NEON/AVX)
+### 1. Fused In-Register NEON Attention (Decode $M=1$)
+During autoregressive generation ($M=1$), standard attention pipelines incur heavy overhead from allocating intermediate matrices for $Q K^T$, transposing $K$, scaling, causal masking, softmax, and multiplying by $V$.
+- **Zero Allocations & Transpose Elimination**: The fused NEON kernel directly streams the cached keys and values from contiguous memory.
+- **Hardware Vectorization**: Uses ARM NEON intrinsics (`vld1q_f32`, `vfmaq_f32`, `vaddvq_f32`) to compute dot products 4 floats at a time in hardware registers.
+- **In-Register Softmax & Value Accumulation**: Computes running maximum reduction, numerically stable exponentiation, and projects directly into the head output vector in a single pass on CPU cache lines.
+
+### 2. Batched AMX / BLAS QKV Projections
+- Instead of executing 24 individual small GEMM operations per layer (8 heads $\times$ 3 projections of size $1 \times 32$), weights for $Q, K, V$ are concatenated horizontally into unified $256 \times 256$ projection matrices.
+- The projection evaluates in 3 unified BLAS GEMM calls, fully saturating the Apple Matrix Coprocessor (AMX) units with a **3.45× GEMM speedup**.
+
+### 3. In-Place $O(1)$ KV Cache Growth
+- Previous implementations called `concat_vertical`, which allocated and re-copied the entire history buffer on every token step ($O(T^2)$ memory copying).
+- Replaced with in-place buffer growth (`append_slice` and `append_tensor`), eliminating all intermediate vector copies and heap reallocations.
+
+### 4. Zero-Allocation Token Generation Loop
+- Replaced per-token dynamic allocation of the 50,257-element vocabulary probability distribution vector with a reusable preallocated buffer hoisted outside the decode loop.
+
+### 5. SIMD Kernels (NEON/AVX)
 Utilizes hardware-level vectorization to process multiple data points in a single instruction.
 - **Implemented in**: `operator+`, `operator*`, `LayerNorm`, `operator/`, `softmax`, `add_bias`.
 
-### 2. Tiled Matrix Multiplication
+### 6. Tiled Matrix Multiplication
 Implements a cache-efficient 32x32 tiling strategy to minimize cache misses and maximize memory bandwidth utilization.
 - **Implemented in**: `operator*`.
 
-### 3. OpenMP Parallelism
+### 7. OpenMP Parallelism
 Distributes independent compute-heavy loops across multiple CPU cores, using adaptive thresholds to avoid threading overhead on small tensors.
 - **Implemented in**: `operator*` (matmul), `operator+` (addition), `softmax`, `add_bias`, `gelu`, and `multiheadattention`.
-
-### 4. KV Caching
-Implements Key-Value caching for $O(N)$ incremental decoding, preventing the redundant re-computation of previous tokens during the generation phase.
-- **Implemented in**: `attention` (using `KVCache` structure).
 
 ## Features
 

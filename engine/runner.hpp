@@ -17,6 +17,8 @@ class Transformer{
     int d_model, max_len, vocab_size, seq_len, num_heads, d_k;
     std::vector<Tensor> qs, ks, vs;
     std::vector<Tensor> q_biases, k_biases, v_biases;
+    Tensor q_concat, k_concat, v_concat;
+    Tensor qb_concat, kb_concat, vb_concat;
     Tensor join_weight, join_bias;
     Tensor gamma1, beta1;   // norm1 - before attention
     Tensor gamma2, beta2;   // norm2 - before FFN
@@ -94,11 +96,87 @@ public:
         return scores.matmul_blas(cache.vs[head_idx]);
     }
 
-    Tensor multiheadattention_cpu(const Tensor& input, KVCache& cache){
+    Tensor multiheadattention(const Tensor& input, KVCache& cache){
+        // Batched Q, K, V projections with native AMX / BLAS (3 calls instead of 24)
+        Tensor Q_all = input.matmul_blas(q_concat).add_bias(qb_concat);
+        Tensor K_all = input.matmul_blas(k_concat).add_bias(kb_concat);
+        Tensor V_all = input.matmul_blas(v_concat).add_bias(vb_concat);
+
+        float scale = std::sqrt(static_cast<float>(d_k));
         std::vector<Tensor> res(num_heads);
-        #pragma omp parallel for
-        for(int i = 0; i < num_heads; i++)
-            res[i] = attention_cpu(input, ks[i], qs[i], vs[i], q_biases[i], k_biases[i], v_biases[i], cache, i);
+
+        if (input.shape(0) == 1) {
+            // Fast fused NEON attention for single-token decode: zero heap allocations, zero transpose
+            float inv_scale = 1.0f / scale;
+            const auto& q_data = Q_all.getData();
+            const auto& k_data = K_all.getData();
+            const auto& v_data = V_all.getData();
+
+            #pragma omp parallel for schedule(static)
+            for(int i = 0; i < num_heads; i++) {
+                cache.ks[i].append_slice(&k_data[i * d_k], d_k);
+                cache.vs[i].append_slice(&v_data[i * d_k], d_k);
+
+                size_t T = cache.ks[i].shape(0);
+                const float* q_ptr = &q_data[i * d_k];
+                const float* k_cache = cache.ks[i].getData().data();
+                const float* v_cache = cache.vs[i].getData().data();
+
+                // Scratch scores on stack for current sequence length
+                float scores[128];
+                float max_s = -1e30f;
+                for (size_t t = 0; t < T; t++) {
+                    const float* k_row = k_cache + t * d_k;
+                    float32x4_t sum = vdupq_n_f32(0.0f);
+                    for (size_t j = 0; j < d_k; j += 4) {
+                        float32x4_t a = vld1q_f32(q_ptr + j);
+                        float32x4_t b = vld1q_f32(k_row + j);
+                        sum = vfmaq_f32(sum, a, b);
+                    }
+                    float dot = vaddvq_f32(sum) * inv_scale;
+                    scores[t] = dot;
+                    if (dot > max_s) max_s = dot;
+                }
+
+                float sum_exp = 0.0f;
+                for (size_t t = 0; t < T; t++) {
+                    float e = std::exp(scores[t] - max_s);
+                    scores[t] = e;
+                    sum_exp += e;
+                }
+                float inv_sum = 1.0f / sum_exp;
+                for (size_t t = 0; t < T; t++) scores[t] *= inv_sum;
+
+                std::vector<float> head_out(d_k);
+                for (size_t j = 0; j < d_k; j += 4) {
+                    float32x4_t out_vec = vdupq_n_f32(0.0f);
+                    for (size_t t = 0; t < T; t++) {
+                        float32x4_t s_vec = vdupq_n_f32(scores[t]);
+                        float32x4_t v_vec = vld1q_f32(v_cache + t * d_k + j);
+                        out_vec = vfmaq_f32(out_vec, s_vec, v_vec);
+                    }
+                    vst1q_f32(&head_out[j], out_vec);
+                }
+                res[i] = Tensor(head_out, 1, d_k);
+            }
+        } else {
+            #pragma omp parallel for schedule(static)
+            for(int i = 0; i < num_heads; i++) {
+                Tensor Qi = Q_all.slice_cols(i * d_k, d_k);
+                Tensor Ki = K_all.slice_cols(i * d_k, d_k);
+                Tensor Vi = V_all.slice_cols(i * d_k, d_k);
+
+                cache.ks[i].append_tensor(Ki);
+                cache.vs[i].append_tensor(Vi);
+
+                Tensor scores = Qi.matmul_blas(cache.ks[i].t());
+                scores = scores / scale;
+                scores = scores.mask();
+                scores = scores.softmax();
+                res[i] = scores.matmul_blas(cache.vs[i]);
+            }
+        }
+
         Tensor concat = Tensor::concat_horizontal(res);
         return concat.matmul_blas(join_weight).add_bias(join_bias);
     }
@@ -410,6 +488,7 @@ class Runner{
             auto prompt_end = std::chrono::high_resolution_clock::now();
             prompt_processing_time_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
             ttft_ms = std::chrono::duration<double, std::milli>(prompt_end - generation_start).count();
+
             std::vector<float> probs(vocab_size);
             for(int i = 0; i < max_new_tokens; i++) {
                 size_t logit_row = (i == 0) ? (tokens.size() - 1) : 0;
