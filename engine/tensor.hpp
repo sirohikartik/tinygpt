@@ -300,4 +300,29 @@ public:
         }
         return Tensor(res, rows, cols);
     }
+
+    Tensor slice_cols(size_t col_start, size_t num_cols) const {
+        std::vector<float> res(rows * num_cols);
+        for(size_t r = 0; r < rows; r++) {
+            std::memcpy(&res[r * num_cols], &data[r * cols + col_start], num_cols * sizeof(float));
+        }
+        return Tensor(res, rows, num_cols);
+    }
+
+    void append_slice(const float* src, size_t count) {
+        data.insert(data.end(), src, src + count);
+        if (cols == 0) cols = count;
+        rows++;
+    }
+
+    void append_tensor(const Tensor& other) {
+        if (data.empty()) {
+            data = other.data;
+            rows = other.rows;
+            cols = other.cols;
+            return;
+        }
+        data.insert(data.end(), other.data.begin(), other.data.end());
+        rows += other.rows;
+    }
 };
