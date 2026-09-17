@@ -24,6 +24,8 @@ class Transformer{
     Tensor gamma2, beta2;   // norm2 - before FFN
     Tensor ffn1_weight, ffn1_bias;  // 256 -> 1024
     Tensor ffn2_weight, ffn2_bias;  // 1024 -> 256
+    Tensor q_concat, k_concat, v_concat;
+    Tensor qb_concat, kb_concat, vb_concat;
 
 public:
     Transformer(int d_model, int max_len, int vocab_size, int seq_len, int num_heads,
@@ -56,8 +58,8 @@ public:
         vb_concat = Tensor::concat_horizontal(v_biases);
     }
 
-    Tensor attention(const Tensor& input, const Tensor& k, const Tensor& q, const Tensor& v,
-                     const Tensor& qb, const Tensor& kb, const Tensor& vb, KVCache& cache, int head_idx){
+    Tensor attention_cpu(const Tensor& input, const Tensor& k, const Tensor& q, const Tensor& v,
+                         const Tensor& qb, const Tensor& kb, const Tensor& vb, KVCache& cache, int head_idx){
         float scale = std::sqrt(static_cast<float>(d_k));
         Tensor Q = input.matmul_blas(q).add_bias(qb);
         Tensor K_curr = input.matmul_blas(k).add_bias(kb);
@@ -75,15 +77,23 @@ public:
         return scores.matmul_blas(cache.vs[head_idx]);
     }
 
-    Tensor gelu(const Tensor& x) {
-        const auto& d = x.getData();
-        std::vector<float> res(d.size());
-        #pragma omp parallel for if(d.size() > 1024)
-        for(size_t i = 0; i < d.size(); i++) {
-            float v = d[i];
-            res[i] = 0.5f * v * (1.0f + std::tanh(0.7978845608f * (v + 0.044715f * v * v * v)));
-        }
-        return Tensor(res, x.shape(0), x.shape(1));
+    Tensor attention_mps(const Tensor& input, const Tensor& k, const Tensor& q, const Tensor& v,
+                         const Tensor& qb, const Tensor& kb, const Tensor& vb, KVCache& cache, int head_idx){
+        float scale = std::sqrt(static_cast<float>(d_k));
+        Tensor Q = input.matmul_blas(q).add_bias(qb);
+        Tensor K_curr = input.matmul_blas(k).add_bias(kb);
+        Tensor V_curr = input.matmul_blas(v).add_bias(vb);
+
+        std::vector<Tensor> k_tensors = {cache.ks[head_idx], K_curr};
+        cache.ks[head_idx] = Tensor::concat_vertical(k_tensors);
+        std::vector<Tensor> v_tensors = {cache.vs[head_idx], V_curr};
+        cache.vs[head_idx] = Tensor::concat_vertical(v_tensors);
+
+        Tensor scores = Q.matmul_blas(cache.ks[head_idx].t());
+        scores = scores / scale;
+        if (input.shape(0) > 1) scores = scores.mask();
+        scores = scores.softmax();
+        return scores.matmul_blas(cache.vs[head_idx]);
     }
 
     Tensor multiheadattention(const Tensor& input, KVCache& cache){
@@ -169,6 +179,58 @@ public:
 
         Tensor concat = Tensor::concat_horizontal(res);
         return concat.matmul_blas(join_weight).add_bias(join_bias);
+    }
+
+    Tensor multiheadattention_mps(const Tensor& input, KVCache& cache){
+        // Batch project all Q, K, V heads with native GPU GEMM in 3 unified calls
+        Tensor Q_all = input.matmul_blas(q_concat).add_bias(qb_concat);
+        Tensor K_all = input.matmul_blas(k_concat).add_bias(kb_concat);
+        Tensor V_all = input.matmul_blas(v_concat).add_bias(vb_concat);
+
+        float scale = std::sqrt(static_cast<float>(d_k));
+        std::vector<Tensor> res(num_heads);
+
+        #pragma omp parallel for schedule(static)
+        for(int i = 0; i < num_heads; i++) {
+            Tensor Qi = Q_all.slice_cols(i * d_k, d_k);
+            Tensor Ki = K_all.slice_cols(i * d_k, d_k);
+            Tensor Vi = V_all.slice_cols(i * d_k, d_k);
+
+            std::vector<Tensor> k_tensors = {cache.ks[i], Ki};
+            cache.ks[i] = Tensor::concat_vertical(k_tensors);
+            std::vector<Tensor> v_tensors = {cache.vs[i], Vi};
+            cache.vs[i] = Tensor::concat_vertical(v_tensors);
+
+            Tensor scores = Qi.matmul_blas(cache.ks[i].t());
+            scores = scores / scale;
+            if (input.shape(0) > 1) scores = scores.mask();
+            scores = scores.softmax();
+            res[i] = scores.matmul_blas(cache.vs[i]);
+        }
+
+        Tensor concat = Tensor::concat_horizontal(res);
+        return concat.matmul_blas(join_weight).add_bias(join_bias);
+    }
+
+    Tensor attention(const Tensor& input, const Tensor& k, const Tensor& q, const Tensor& v,
+                     const Tensor& qb, const Tensor& kb, const Tensor& vb, KVCache& cache, int head_idx){
+#if defined(USE_MPS) || defined(MPS)
+        return attention_mps(input, k, q, v, qb, kb, vb, cache, head_idx);
+#else
+        return attention_cpu(input, k, q, v, qb, kb, vb, cache, head_idx);
+#endif
+    }
+
+    Tensor multiheadattention(const Tensor& input, KVCache& cache){
+#if defined(USE_MPS) || defined(MPS)
+        return multiheadattention_mps(input, cache);
+#else
+        return multiheadattention_cpu(input, cache);
+#endif
+    }
+
+    Tensor gelu(const Tensor& x) {
+        return x.gelu();
     }
 
     Tensor forward(const Tensor& input, KVCache& cache){
@@ -327,6 +389,11 @@ class Runner{
                       << ", d_model=" << d_model
                       << ", heads=" << num_heads
                       << ", blocks=" << blocks << "\n";
+#if defined(USE_MPS) || defined(MPS)
+            std::cout << "Backend: Apple Metal GPU (MPS + Native Compute Kernels)\n";
+#else
+            std::cout << "Backend: CPU (NEON + Apple Accelerate)\n";
+#endif
 
             std::vector<std::vector<Tensor>> Qs(blocks), Ks(blocks), Vs(blocks);
             std::vector<std::vector<Tensor>> Qbs(blocks), Kbs(blocks), Vbs(blocks);

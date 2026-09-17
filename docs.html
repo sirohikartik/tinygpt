@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>inference-engine — docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#000000;
+    --panel:#0a0a0a;
+    --panel-2:#0d0d0d;
+    --line:#1c1c1c;
+    --line-soft:#141414;
+    --text:#d9d6cf;
+    --text-hi:#f2f0ea;
+    --dim:#6b6862;
+    --dim-2:#454340;
+    --accent:#ff7a33;
+    --accent-soft:rgba(255,122,51,.13);
+    --teal:#5aa79c;
+    --mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  *{box-sizing:border-box;}
+  ::selection{background:var(--accent-soft); color:var(--text-hi);}
+
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  body{
+    margin:0;
+    background:var(--black);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:15px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  /* ---------- layout ---------- */
+  .layout{
+    display:flex;
+    min-height:100vh;
+  }
+
+  /* ---------- sidebar ---------- */
+  .sidebar{
+    width:280px;
+    flex-shrink:0;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    position:sticky;
+    top:0;
+    height:100vh;
+    overflow-y:auto;
+    padding:28px 0 40px;
+  }
+  .sidebar::-webkit-scrollbar{width:8px;}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--line); border-radius:0;}
+
+  .brand{
+    padding:0 24px 22px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:18px;
+  }
+  .brand .k{
+    color:var(--dim);
+    font-size:11px;
+    letter-spacing:.12em;
+  }
+  .brand h1{
+    margin:6px 0 4px;
+    font-size:17px;
+    font-weight:700;
+    color:var(--text-hi);
+    letter-spacing:-.01em;
+  }
+  .brand h1 .dot{color:var(--accent);}
+  .brand p{
+    margin:0;
+    color:var(--dim);
+    font-size:12px;
+    line-height:1.5;
+  }
+  .brand .badges{
+    display:flex; flex-wrap:wrap; gap:6px;
+    margin-top:12px;
+  }
+  .badge{
+    font-size:10px;
+    letter-spacing:.04em;
+    color:var(--teal);
+    border:1px solid var(--line);
+    padding:3px 7px;
+    background:var(--panel-2);
+  }
+
+  nav.groups{padding:0 12px;}
+  .group{margin-bottom:4px;}
+  .group-label{
+    font-size:10px;
+    letter-spacing:.14em;
+    color:var(--dim-2);
+    padding:14px 12px 6px;
+  }
+  .navlink{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    padding:6px 12px;
+    color:var(--dim);
+    font-size:13px;
+    border-left:2px solid transparent;
+    cursor:pointer;
+  }
+  .navlink .addr{
+    color:var(--dim-2);
+    font-size:11px;
+    flex-shrink:0;
+  }
+  .navlink:hover{color:var(--text); text-decoration:none; background:var(--panel-2);}
+  .navlink.active{
+    color:var(--text-hi);
+    border-left-color:var(--accent);
+    background:var(--accent-soft);
+  }
+  .navlink.active .addr{color:var(--accent);}
+
+  /* ---------- mobile toggle ---------- */
+  .menu-btn{
+    display:none;
+    position:fixed;
+    top:14px; left:14px;
+    z-index:50;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text-hi);
+    font-family:var(--mono);
+    font-size:12px;
+    padding:8px 10px;
+    cursor:pointer;
+  }
+
+  /* ---------- main ---------- */
+  main{
+    flex:1;
+    min-width:0;
+    padding:56px 56px 120px;
+    max-width:880px;
+  }
+
+  .hero{
+    border-bottom:1px solid var(--line);
+    padding-bottom:32px;
+    margin-bottom:44px;
+  }
+  .hero .prompt{
+    color:var(--dim);
+    font-size:13px;
+    margin-bottom:10px;
+  }
+  .hero .prompt .cursor{
+    display:inline-block;
+    width:8px; height:14px;
+    background:var(--accent);
+    margin-left:2px;
+    vertical-align:-2px;
+    animation:blink 1.1s step-end infinite;
+  }
+  @keyframes blink{50%{opacity:0;}}
+  .hero h1{
+    font-size:34px;
+    margin:0 0 12px;
+    color:var(--text-hi);
+    letter-spacing:-.01em;
+    font-weight:700;
+  }
+  .hero p.lead{
+    color:var(--text);
+    font-size:15px;
+    max-width:640px;
+    margin:0 0 20px;
+  }
+  .hero .stats{
+    display:grid;
+    grid-template-columns:repeat(4, auto);
+    gap:0;
+    border:1px solid var(--line);
+    width:fit-content;
+  }
+  .hero .stat{
+    padding:12px 20px;
+    border-right:1px solid var(--line);
+  }
+  .hero .stat:last-child{border-right:none;}
+  .hero .stat .n{color:var(--accent); font-size:18px; font-weight:700;}
+  .hero .stat .l{color:var(--dim); font-size:10px; letter-spacing:.08em; margin-top:2px;}
+
+  section{
+    margin-bottom:56px;
+    scroll-margin-top:24px;
+  }
+  section h2{
+    font-size:20px;
+    color:var(--text-hi);
+    margin:0 0 6px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  section h2 .addr{
+    color:var(--accent);
+    font-size:13px;
+    font-weight:400;
+  }
+  section .sub{
+    color:var(--dim);
+    font-size:13px;
+    margin:0 0 20px;
+  }
+  section h3{
+    font-size:14px;
+    color:var(--text-hi);
+    margin:26px 0 10px;
+  }
+  section p{color:var(--text); margin:0 0 14px;}
+  section ul{margin:0 0 14px; padding-left:18px; color:var(--text);}
+  section li{margin-bottom:5px;}
+
+  code{
+    font-family:var(--mono);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    padding:1px 5px;
+    font-size:13px;
+    color:var(--teal);
+  }
+
+  pre{
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:16px 18px;
+    overflow-x:auto;
+    margin:0 0 18px;
+    position:relative;
+  }
+  pre::before{
+    content:attr(data-title);
+    display:block;
+    color:var(--dim-2);
+    font-size:10px;
+    letter-spacing:.1em;
+    margin-bottom:10px;
+  }
+  pre code{
+    background:none; border:none; padding:0;
+    color:var(--text);
+    font-size:13px;
+    line-height:1.6;
+  }
+  pre .c1{color:var(--dim);}
+  pre .out{color:var(--teal);}
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:0 0 18px;
+    font-size:13px;
+  }
+  th, td{
+    text-align:left;
+    padding:9px 14px;
+    border:1px solid var(--line);
+  }
+  th{
+    color:var(--dim);
+    font-weight:500;
+    font-size:11px;
+    letter-spacing:.06em;
+    background:var(--panel);
+  }
+  td{color:var(--text);}
+  tr:nth-child(even) td{background:var(--panel-2);}
+  td .hi{color:var(--accent); font-weight:600;}
+
+  .filetree{
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:16px 18px;
+    font-size:13px;
+    color:var(--text);
+    overflow-x:auto;
+    white-space:pre;
+    margin:0 0 18px;
+    line-height:1.7;
+  }
+  .filetree .cm{color:var(--dim);}
+
+  .callout{
+    border-left:2px solid var(--accent);
+    background:var(--accent-soft);
+    padding:12px 16px;
+    font-size:13px;
+    color:var(--text);
+    margin:0 0 18px;
+  }
+
+  footer{
+    border-top:1px solid var(--line);
+    padding-top:24px;
+    color:var(--dim);
+    font-size:12px;
+  }
+
+  @media (max-width: 880px){
+    .sidebar{
+      position:fixed;
+      left:0; top:0;
+      transform:translateX(-100%);
+      transition:transform .18s ease;
+      z-index:40;
+      width:270px;
+    }
+    .sidebar.open{transform:translateX(0);}
+    .menu-btn{display:block;}
+    main{padding:80px 22px 100px; max-width:100%;}
+    .hero h1{font-size:26px;}
+    .hero .stats{grid-template-columns:repeat(2,auto);}
+  }
+</style>
+</head>
+<body>
+
+<button class="menu-btn" id="menuBtn">☰ menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="k">// documentation</div>
+      <h1>inference<span class="dot">-</span>engine</h1>
+      <p>A ~30M parameter transformer, hand-rolled in C++ down to the SIMD kernels.</p>
+      <div class="badges">
+        <span class="badge">C++17</span>
+        <span class="badge">ARM NEON</span>
+        <span class="badge">OpenMP</span>
+      </div>
+    </div>
+
+    <nav class="groups" id="nav">
+      <div class="group">
+        <div class="group-label">GETTING STARTED</div>
+        <div class="navlink" data-target="overview"><span class="addr">0x00</span>Overview</div>
+        <div class="navlink" data-target="quickstart"><span class="addr">0x01</span>Quick start</div>
+        <div class="navlink" data-target="platform"><span class="addr">0x02</span>Platform</div>
+      </div>
+      <div class="group">
+        <div class="group-label">BENCHMARKS</div>
+        <div class="navlink" data-target="performance"><span class="addr">0x03</span>Performance</div>
+      </div>
+      <div class="group">
+        <div class="group-label">INTERNALS</div>
+        <div class="navlink" data-target="optimizations"><span class="addr">0x04</span>Optimizations</div>
+        <div class="navlink" data-target="features"><span class="addr">0x05</span>Features</div>
+        <div class="navlink" data-target="tensor-ops"><span class="addr">0x06</span>Tensor operations</div>
+        <div class="navlink" data-target="weights"><span class="addr">0x07</span>Weight format</div>
+      </div>
+      <div class="group">
+        <div class="group-label">BUILD &amp; RUN</div>
+        <div class="navlink" data-target="building"><span class="addr">0x08</span>Building</div>
+        <div class="navlink" data-target="usage"><span class="addr">0x09</span>Usage</div>
+      </div>
+      <div class="group">
+        <div class="group-label">REFERENCE</div>
+        <div class="navlink" data-target="structure"><span class="addr">0x0A</span>Project structure</div>
+        <div class="navlink" data-target="architecture"><span class="addr">0x0B</span>Model architecture</div>
+        <div class="navlink" data-target="errors"><span class="addr">0x0C</span>Error handling</div>
+        <div class="navlink" data-target="limitations"><span class="addr">0x0D</span>Limitations</div>
+        <div class="navlink" data-target="dependencies"><span class="addr">0x0E</span>Dependencies</div>
+      </div>
+      <div class="group">
+        <div class="group-label">ABOUT</div>
+        <div class="navlink" data-target="license"><span class="addr">0x0F</span>License</div>
+        <div class="navlink" data-target="credits"><span class="addr">0x10</span>Acknowledgments</div>
+      </div>
+    </nav>
+  </aside>
+
+  <main>
+
+    <div class="hero">
+      <div class="prompt">visitor@docs:~$ ./a.out<span class="cursor"></span></div>
+      <h1>Inference Engine</h1>
+      <p class="lead">A custom high-performance C++ inference engine that runs a 30M-parameter decoder-only transformer, trained on TinyStories — tiled matmul, NEON/AVX kernels, OpenMP, and KV caching, no framework in between.</p>
+      <div class="stats">
+        <div class="stat"><div class="n">435</div><div class="l">TOK/S (BLAS)</div></div>
+        <div class="stat"><div class="n">8.3ms</div><div class="l">TIME TO FIRST TOKEN</div></div>
+        <div class="stat"><div class="n">37.9x</div><div class="l">VS PYTORCH MPS</div></div>
+        <div class="stat"><div class="n">30M</div><div class="l">PARAMETERS</div></div>
+      </div>
+    </div>
+
+    <section id="overview">
+      <h2><span class="addr">0x00</span>Overview</h2>
+      <p class="sub">What this project is and how it's put together.</p>
+      <p>This project implements a complete inference pipeline for decoder-only transformer models. The engine features optimized matrix multiplication with SIMD instructions, a GPT-2 compatible Byte Pair Encoding tokenizer, and a modular architecture that separates tensor operations, model components, and tokenization.</p>
+      <p>It's built to run one specific model well: a ~30M parameter transformer trained on the <strong>TinyStories</strong> dataset, small enough to serve entirely from CPU cache and SIMD registers rather than a GPU.</p>
+    </section>
+
+    <section id="quickstart">
+      <h2><span class="addr">0x01</span>Quick start</h2>
+      <p class="sub">macOS, Apple Silicon.</p>
+      <pre data-title="terminal"><code><span class="c1"># Step 0: Install OpenMP dependency</span>
+brew install libomp
+
+<span class="c1"># Step 1: Build the project</span>
+make
+
+<span class="c1"># Step 2: Run inference</span>
+./a.out</code></pre>
+      <div class="callout">Export the tokenizer vocabulary first if <code>gpt2_vocab.json</code> and <code>merges.txt</code> aren't already in the project root — see <a href="#building">Building</a>.</div>
+    </section>
+
+    <section id="platform">
+      <h2><span class="addr">0x02</span>Platform compatibility</h2>
+      <p>This project is optimized exclusively for <strong>macOS (Apple Silicon)</strong>, utilizing the <strong>ARM NEON</strong> library for SIMD instructions. It is a CPU-only implementation — there is no GPU code path.</p>
+    </section>
+
+    <section id="performance">
+      <h2><span class="addr">0x03</span>Performance comparison</h2>
+      <p class="sub">Mean of 5 independent runs, reproducible via <code>benchmark.sh</code>.</p>
+      <p>The engine was benchmarked against naive PyTorch implementations running on both Apple Silicon (MPS) and CPU.</p>
+      <table>
+        <thead>
+          <tr><th>Metric</th><th>PyTorch (MPS)</th><th>PyTorch (CPU)</th><th>Custom C++ Engine</th><th>Custom C++ (BLAS)</th><th>Speedup vs MPS</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>TTFT</td><td>910.29 ms</td><td>13.53 ms</td><td>14.08 ms</td><td class="hi">8.32 ms</td><td>≈ 109.4x</td></tr>
+          <tr><td>Avg time / token</td><td>87.00 ms</td><td>12.20 ms</td><td>8.11 ms</td><td class="hi">2.13 ms</td><td>≈ 40.8x</td></tr>
+          <tr><td>Throughput</td><td>11.49 tok/s</td><td>81.96 tok/s</td><td>120.94 tok/s</td><td class="hi">435.29 tok/s</td><td>≈ 37.9x</td></tr>
+        </tbody>
+      </table>
+      <p>A <code>benchmark.sh</code> script is provided in the root directory to reproduce these metrics and perform comparative analysis.</p>
+    </section>
+
+    <section id="optimizations">
+      <h2><span class="addr">0x04</span>Optimizations</h2>
+      <p class="sub">Four techniques account for most of the speedup above.</p>
+
+      <h3>1. SIMD kernels (NEON / AVX)</h3>
+      <p>Utilizes hardware-level vectorization to process multiple data points in a single instruction. Implemented in <code>operator+</code>, <code>operator*</code>, <code>LayerNorm</code>, <code>operator/</code>, <code>softmax</code>, <code>add_bias</code>.</p>
+
+      <h3>2. Tiled matrix multiplication</h3>
+      <p>Implements a cache-efficient 32×32 tiling strategy to minimize cache misses and maximize memory bandwidth utilization. Implemented in <code>operator*</code>.</p>
+
+      <h3>3. OpenMP parallelism</h3>
+      <p>Distributes independent compute-heavy loops across multiple CPU cores, using adaptive thresholds to avoid threading overhead on small tensors. Implemented in <code>operator*</code> (matmul), <code>operator+</code> (addition), <code>softmax</code>, <code>add_bias</code>, <code>gelu</code>, and <code>multiheadattention</code>.</p>
+
+      <h3>4. KV caching</h3>
+      <p>Implements key-value caching for O(N) incremental decoding, preventing the redundant re-computation of previous tokens during the generation phase. Implemented in <code>attention</code>, using the <code>KVCache</code> structure.</p>
+    </section>
+
+    <section id="features">
+      <h2><span class="addr">0x05</span>Features</h2>
+      <table>
+        <thead><tr><th>Feature</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Multi-Head Attention</td><td>Full implementation with causal masking</td></tr>
+          <tr><td>Layer Normalization</td><td>Pre-normalization architecture support</td></tr>
+          <tr><td>BPE Tokenizer</td><td>GPT-2 compatible byte-level BPE tokenization</td></tr>
+          <tr><td>Positional Encodings</td><td>Sinusoidal positional embeddings</td></tr>
+          <tr><td>Temperature Sampling</td><td>Configurable sampling with temperature scaling</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="tensor-ops">
+      <h2><span class="addr">0x06</span>Tensor operations</h2>
+      <p class="sub">The <code>Tensor</code> class.</p>
+      <table>
+        <thead><tr><th>Operation</th><th>Method</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Matrix multiplication</td><td><code>operator*</code></td><td>Tiled matmul with 32×32 blocks</td></tr>
+          <tr><td>Addition</td><td><code>operator+</code></td><td>Element-wise addition</td></tr>
+          <tr><td>Division</td><td><code>operator/</code></td><td>Scalar division</td></tr>
+          <tr><td>Transpose</td><td><code>t()</code></td><td>Matrix transpose</td></tr>
+          <tr><td>Softmax</td><td><code>softmax()</code></td><td>Row-wise softmax with numerical stability</td></tr>
+          <tr><td>Layer normalization</td><td><code>LayerNorm()</code></td><td>Normalization with learnable parameters</td></tr>
+          <tr><td>Causal mask</td><td><code>mask()</code></td><td>Lower triangular mask for attention</td></tr>
+          <tr><td>Concatenation</td><td><code>concat_horizontal()</code></td><td>Horizontal tensor concatenation</td></tr>
+          <tr><td>Concatenation</td><td><code>concat_vertical()</code></td><td>Vertical concatenation, used for the KV cache</td></tr>
+          <tr><td>Bias addition</td><td><code>add_bias()</code></td><td>Add bias vector to each row</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="weights">
+      <h2><span class="addr">0x07</span>Weight format</h2>
+      <p>Weights are stored in NumPy <code>.npy</code> format and loaded at runtime. The naming convention follows:</p>
+      <pre data-title="naming convention"><code>transforms.{block}.{component}.{head}.{weight|bias}.npy</code></pre>
+      <table>
+        <thead><tr><th>Component</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>q</code></td><td>Query projection</td></tr>
+          <tr><td><code>k</code></td><td>Key projection</td></tr>
+          <tr><td><code>v</code></td><td>Value projection</td></tr>
+          <tr><td><code>join</code></td><td>Output projection (after attention)</td></tr>
+          <tr><td><code>ffn.0</code></td><td>FFN intermediate layer</td></tr>
+          <tr><td><code>ffn.3</code></td><td>FFN output layer</td></tr>
+          <tr><td><code>norm1</code></td><td>Pre-attention layer norm</td></tr>
+          <tr><td><code>norm2</code></td><td>Pre-FFN layer norm</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="building">
+      <h2><span class="addr">0x08</span>Building</h2>
+      <h3>Prerequisites</h3>
+      <ul>
+        <li>C++17 compatible compiler (<code>g++</code> or <code>clang++</code>)</li>
+        <li>Python 3.x with the <code>transformers</code> library, for tokenizer export</li>
+      </ul>
+      <h3>Compile</h3>
+      <pre data-title="terminal"><code>make</code></pre>
+      <p>The Makefile uses the following optimization flags:</p>
+      <table>
+        <thead><tr><th>Flag</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>-std=c++17</code></td><td>C++17 standard</td></tr>
+          <tr><td><code>-O3</code></td><td>Maximum optimization level</td></tr>
+          <tr><td><code>-march=native</code></td><td>Enable CPU-specific SIMD instructions</td></tr>
+          <tr><td><code>-ffast-math</code></td><td>Aggressive floating-point optimizations</td></tr>
+          <tr><td><code>-funroll-loops</code></td><td>Loop unrolling for performance</td></tr>
+        </tbody>
+      </table>
+      <h3>Export tokenizer</h3>
+      <p>Before running inference, export the GPT-2 tokenizer vocabulary:</p>
+      <pre data-title="terminal"><code>python tokenizer.py</code></pre>
+      <p>This creates <code>gpt2_vocab.json</code> and <code>merges.txt</code> in the project root.</p>
+    </section>
+
+    <section id="usage">
+      <h2><span class="addr">0x09</span>Usage</h2>
+      <h3>Running inference</h3>
+      <pre data-title="terminal"><code>./a.out</code></pre>
+      <p>The <code>Runner</code> class initializes the model with weights from the <code>weights/</code> directory and performs autoregressive generation.</p>
+
+      <h3>Customizing generation</h3>
+      <p>Edit the <code>run()</code> function in <code>runner.hpp</code> to modify:</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>prompt</code></td><td>"Hello, how are you?"</td><td>Input text for generation</td></tr>
+          <tr><td><code>max_new_tokens</code></td><td>5</td><td>Maximum tokens to generate</td></tr>
+          <tr><td><code>temperature</code></td><td>0.8</td><td>Sampling temperature (0 = greedy)</td></tr>
+          <tr><td><code>seq_len</code></td><td>128</td><td>Maximum context length</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Example output</h3>
+      <pre data-title="stdout"><code>Model config: vocab=50257, d_model=256, heads=8, blocks=6
+Loaded vocab: 50257 tokens
+Loaded merges: 50000 BPE merge rules
+Model initialized!
+Tokenized: 6 tokens
+Generating...
+after embeddings: 6x256
+after block 0: 6x256
+after block 1: 6x256
+after block 2: 6x256
+after block 3: 6x256
+after block 4: 6x256
+after block 5: 6x256
+logits: 6x50257
+
+<span class="out">=== Generated Text ===
+Hello, how are you? Once upon a time...
+======================</span></code></pre>
+    </section>
+
+    <section id="structure">
+      <h2><span class="addr">0x0A</span>Project structure</h2>
+      <div class="filetree">Inference/
+├── engine/
+│   ├── tensor.hpp          <span class="cm"># Tensor class with matmul, softmax, LayerNorm</span>
+│   ├── tokenizer.hpp       <span class="cm"># GPT-2 BPE tokenizer implementation</span>
+│   ├── runner.hpp          <span class="cm"># Model, Transformer, Runner classes</span>
+│   ├── parser.hpp          <span class="cm"># Weight loading from .npy files</span>
+│   ├── npy.hpp             <span class="cm"># NumPy file parser (external library)</span>
+│   └── json.hpp            <span class="cm"># JSON parser (external library)</span>
+├── weights/
+│   ├── embeddings.weight.npy
+│   ├── out.weight.npy
+│   ├── out.bias.npy
+│   └── transforms.*.npy    <span class="cm"># Transformer block weights</span>
+├── gpt2_vocab.json         <span class="cm"># Tokenizer vocabulary</span>
+├── merges.txt              <span class="cm"># BPE merge rules</span>
+├── tokenizer.py            <span class="cm"># Python script to export tokenizer</span>
+├── export_tokenizer.py     <span class="cm"># Alternative tokenizer export script</span>
+├── convert.py              <span class="cm"># Model conversion utilities</span>
+├── run.cpp                 <span class="cm"># Main entry point</span>
+├── Makefile                <span class="cm"># Build configuration</span>
+└── README.md                <span class="cm"># This file</span></div>
+    </section>
+
+    <section id="architecture">
+      <h2><span class="addr">0x0B</span>Model architecture</h2>
+      <p>The engine supports a decoder-only transformer with the following configuration:</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Parameters</td><td>~30M</td></tr>
+          <tr><td>d_model</td><td>256</td></tr>
+          <tr><td>Number of heads</td><td>8</td></tr>
+          <tr><td>Number of blocks</td><td>6</td></tr>
+          <tr><td>d_k (per head)</td><td>32</td></tr>
+          <tr><td>Vocabulary size</td><td>50257</td></tr>
+          <tr><td>Max sequence length</td><td>128</td></tr>
+          <tr><td>Training dataset</td><td>TinyStories</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Performance considerations</h3>
+      <table>
+        <thead><tr><th>Optimization</th><th>Impact</th></tr></thead>
+        <tbody>
+          <tr><td>Tiled matrix multiplication</td><td>Reduces cache misses</td></tr>
+          <tr><td>SIMD via <code>-march=native</code></td><td>2–4x speedup on modern CPUs</td></tr>
+          <tr><td><code>-ffast-math</code></td><td>Enables vectorization of floating-point ops</td></tr>
+          <tr><td><code>-funroll-loops</code></td><td>Reduces loop overhead</td></tr>
+          <tr><td>Const references</td><td>Avoids unnecessary copies</td></tr>
+          <tr><td>Reserve for vectors</td><td>Prevents reallocations</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="errors">
+      <h2><span class="addr">0x0C</span>Error handling</h2>
+      <ul>
+        <li>Shape mismatch detection for all tensor operations</li>
+        <li>Try-catch blocks around attention and forward passes</li>
+        <li>Validation of weight dimensions during initialization</li>
+        <li>Graceful handling of missing tokenizer files</li>
+        <li>Detailed error messages with tensor shapes</li>
+      </ul>
+    </section>
+
+    <section id="limitations">
+      <h2><span class="addr">0x0D</span>Limitations</h2>
+      <table>
+        <thead><tr><th>Limitation</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Single GPU</td><td>CPU-only implementation</td></tr>
+          <tr><td>Batch size</td><td>Supports batch size of 1</td></tr>
+          <tr><td>Precision</td><td>FP32 only (no FP16 / INT8 quantization)</td></tr>
+          <tr><td>Context</td><td>Fixed maximum context length</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="dependencies">
+      <h2><span class="addr">0x0E</span>Dependencies</h2>
+      <table>
+        <thead><tr><th>Library</th><th>Purpose</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td><code>npy.hpp</code></td><td>NumPy file parsing</td><td>GitHub (external)</td></tr>
+          <tr><td><code>json.hpp</code></td><td>JSON parsing</td><td>GitHub (external)</td></tr>
+          <tr><td><code>transformers</code></td><td>Tokenizer export</td><td>HuggingFace (Python)</td></tr>
+          <tr><td><code>libomp</code></td><td>OpenMP support for parallelization</td><td>Homebrew (macOS)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="license">
+      <h2><span class="addr">0x0F</span>License</h2>
+      <p>This project is for educational and research purposes.</p>
+    </section>
+
+    <section id="credits">
+      <h2><span class="addr">0x10</span>Acknowledgments</h2>
+      <ul>
+        <li>TinyStories dataset for model training</li>
+        <li>HuggingFace transformers for tokenizer reference</li>
+        <li>GPT-2 architecture as the model foundation</li>
+      </ul>
+      <footer>
+        AI assistance was used during development to locate and fix bugs, add error handling, and write boilerplate code. <code>npy.hpp</code> and <code>json.hpp</code> are external libraries obtained from GitHub, not written by the author. The <code>tokenizer.hpp</code> implementation was written by Claude Sonnet 4.6.
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const menuBtn = document.getElementById('menuBtn');
+  menuBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
+
+  const links = Array.from(document.querySelectorAll('.navlink'));
+  const sections = links.map(l => document.getElementById(l.dataset.target));
+
+  links.forEach(link => {
+    link.addEventListener('click', () => {
+      document.getElementById(link.dataset.target).scrollIntoView({behavior:'smooth'});
+      sidebar.classList.remove('open');
+    });
+  });
+
+  const setActive = (id) => {
+    links.forEach(l => l.classList.toggle('active', l.dataset.target === id));
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  }, {rootMargin: '-10% 0px -70% 0px', threshold: 0});
+
+  sections.forEach(s => s && observer.observe(s));
+  setActive('overview');
+</script>
+
+</body>
+</html>
